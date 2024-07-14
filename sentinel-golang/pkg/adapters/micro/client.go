@@ -1,15 +1,11 @@
-package client
+package micro
 
 import (
 	"context"
-	"fmt"
 
-	"go-micro.dev/v4/client"
-	"go-micro.dev/v4/registry"
-	"go-micro.dev/v4/selector"
-
-	sentinelApi "github.com/alibaba/sentinel-golang/api"
+	sentinel "github.com/alibaba/sentinel-golang/api"
 	"github.com/alibaba/sentinel-golang/core/base"
+	"github.com/micro/go-micro/v2/client"
 )
 
 type clientWrapper struct {
@@ -25,10 +21,10 @@ func (c *clientWrapper) Call(ctx context.Context, req client.Request, rsp interf
 		resourceName = options.clientResourceExtract(ctx, req)
 	}
 
-	entry, blockErr := sentinelApi.Entry(
+	entry, blockErr := sentinel.Entry(
 		resourceName,
-		sentinelApi.WithResourceType(base.ResTypeRPC),
-		sentinelApi.WithTrafficType(base.Outbound),
+		sentinel.WithResourceType(base.ResTypeRPC),
+		sentinel.WithTrafficType(base.Outbound),
 	)
 
 	if blockErr != nil {
@@ -39,31 +35,12 @@ func (c *clientWrapper) Call(ctx context.Context, req client.Request, rsp interf
 	}
 	defer entry.Exit()
 
-	// 第一步：通过SentinelEntry获取Filter列表，作用到RPC调用的前序阶段
-	opt1 := client.WithSelectOption(selector.WithFilter(
-		func(old []*registry.Service) []*registry.Service {
-			for _, service := range old {
-				for _, ep := range service.Nodes {
-					fmt.Println("opt1", ep.Id)
-				}
-			}
-			return old
-		},
-	))
+	err := c.Client.Call(ctx, req, rsp, opts...)
+	if err != nil {
+		sentinel.TraceError(entry, err)
+	}
 
-	// 第二步：根据RPC调用的结果更新被调用实例的健康状态
-	opt2 := client.WithCallWrapper(func(f1 client.CallFunc) client.CallFunc {
-		return func(ctx context.Context, node *registry.Node, req client.Request, rsp interface{}, opts client.CallOptions) error {
-			fmt.Println("opt2", node.Id)
-			err := f1(ctx, node, req, rsp, opts)
-			if err != nil {
-				sentinelApi.TraceError(entry, err)
-			}
-			return err
-		}
-	})
-	opts = append(opts, opt1, opt2)
-	return c.Client.Call(ctx, req, rsp, opts...)
+	return err
 }
 
 func (c *clientWrapper) Stream(ctx context.Context, req client.Request, opts ...client.CallOption) (client.Stream, error) {
@@ -74,10 +51,10 @@ func (c *clientWrapper) Stream(ctx context.Context, req client.Request, opts ...
 		resourceName = options.streamClientResourceExtract(ctx, req)
 	}
 
-	entry, blockErr := sentinelApi.Entry(
+	entry, blockErr := sentinel.Entry(
 		resourceName,
-		sentinelApi.WithResourceType(base.ResTypeRPC),
-		sentinelApi.WithTrafficType(base.Outbound),
+		sentinel.WithResourceType(base.ResTypeRPC),
+		sentinel.WithTrafficType(base.Outbound),
 	)
 
 	if blockErr != nil {
@@ -90,7 +67,7 @@ func (c *clientWrapper) Stream(ctx context.Context, req client.Request, opts ...
 
 	stream, err := c.Client.Stream(ctx, req, opts...)
 	if err != nil {
-		sentinelApi.TraceError(entry, err)
+		sentinel.TraceError(entry, err)
 	}
 
 	return stream, err
