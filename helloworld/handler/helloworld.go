@@ -18,7 +18,7 @@ type Helloworld struct {
 func (e *Helloworld) Call(ctx context.Context, req *pb.CallRequest, rsp *pb.CallResponse) error {
 	rsp.Msg = "Hello " + req.Name + ", I am " + e.Name
 	if e.Name[0]%2 == 0 {
-		return errors.New("even names are not allowed")
+		return errors.New("even name is not allowed")
 	}
 	return nil
 }

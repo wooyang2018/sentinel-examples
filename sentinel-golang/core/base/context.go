@@ -14,7 +14,9 @@
 
 package base
 
-import "github.com/alibaba/sentinel-golang/util"
+import (
+	"github.com/alibaba/sentinel-golang/util"
+)
 
 type EntryContext struct {
 	entry *SentinelEntry
@@ -77,6 +79,14 @@ func (ctx *EntryContext) Rt() uint64 {
 
 func (ctx *EntryContext) FilterNodes() []string {
 	return ctx.RuleCheckResult.FilterNodes()
+}
+
+func (ctx *EntryContext) AddData(key, val interface{}) {
+	ctx.Data[key] = val
+}
+
+func (ctx *EntryContext) GetData(key interface{}) interface{} {
+	return ctx.Data[key]
 }
 
 func NewEmptyEntryContext() *EntryContext {

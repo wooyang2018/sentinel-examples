@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"go-micro.dev/v4/client"
 	"go-micro.dev/v4/registry"
@@ -42,11 +43,22 @@ func (c *clientWrapper) Call(ctx context.Context, req client.Request, rsp interf
 	// 第一步：通过SentinelEntry获取Filter列表，作用到RPC调用的前序阶段
 	opt1 := client.WithSelectOption(selector.WithFilter(
 		func(old []*registry.Service) []*registry.Service {
-			fmt.Println(entry.Context().FilterNodes())
+			nodes := entry.Context().FilterNodes()
+			nodesMap := make(map[string]struct{})
+			for _, node := range nodes {
+				nodesMap[node] = struct{}{}
+			}
+
 			for _, service := range old {
-				for _, ep := range service.Nodes {
-					fmt.Println("opt1", ep.Id)
+				fmt.Println("Filter Pre: ", service.Nodes)
+				nodesCopy := slices.Clone(service.Nodes)
+				service.Nodes = make([]*registry.Node, 0)
+				for _, ep := range nodesCopy {
+					if _, ok := nodesMap[ep.Id]; !ok {
+						service.Nodes = append(service.Nodes, ep)
+					}
 				}
+				fmt.Println("Filter Post: ", service.Nodes)
 			}
 			return old
 		},
@@ -55,8 +67,8 @@ func (c *clientWrapper) Call(ctx context.Context, req client.Request, rsp interf
 	// 第二步：根据RPC调用的结果更新被调用实例的健康状态
 	opt2 := client.WithCallWrapper(func(f1 client.CallFunc) client.CallFunc {
 		return func(ctx context.Context, node *registry.Node, req client.Request, rsp interface{}, opts client.CallOptions) error {
-			fmt.Println("opt2", node.Id)
 			err := f1(ctx, node, req, rsp, opts)
+			sentinelApi.TraceCallee(entry, node.Id)
 			if err != nil {
 				sentinelApi.TraceError(entry, err)
 			}

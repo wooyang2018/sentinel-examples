@@ -15,9 +15,10 @@
 package api
 
 import (
+	"github.com/pkg/errors"
+
 	"github.com/alibaba/sentinel-golang/core/base"
 	"github.com/alibaba/sentinel-golang/logging"
-	"github.com/pkg/errors"
 )
 
 // TraceError records the provided error to the given SentinelEntry.
@@ -31,6 +32,18 @@ func TraceError(entry *base.SentinelEntry, err error) {
 	if entry == nil || err == nil {
 		return
 	}
-
 	entry.SetError(err)
+}
+
+func TraceCallee(entry *base.SentinelEntry, nodeID string) {
+	defer func() {
+		if e := recover(); e != nil {
+			logging.Error(errors.Errorf("%+v", e), "Failed to api.TraceCallee()")
+			return
+		}
+	}()
+	if entry == nil || nodeID == "" {
+		return
+	}
+	entry.AddData("callee", nodeID)
 }

@@ -16,7 +16,7 @@ package outlier
 
 import (
 	"github.com/alibaba/sentinel-golang/core/base"
-	"github.com/alibaba/sentinel-golang/logging"
+	"github.com/alibaba/sentinel-golang/core/circuitbreaker"
 )
 
 const (
@@ -50,5 +50,29 @@ func (c *MetricStatSlot) OnCompleted(ctx *base.EntryContext) {
 	res := ctx.Resource.Name()
 	err := ctx.Err()
 	rt := ctx.Rt()
-	logging.Debug(res, err, rt)
+	nodes := getNodesOfResource(res)
+	nodeID := ctx.GetData("callee").(string)
+	if nodeID == "" {
+		return
+	}
+	if _, ok := nodes[nodeID]; !ok {
+		newOneBreakers(res, nodeID)
+		nodes = getNodesOfResource(res)
+	}
+	for _, breaker := range nodes[nodeID] {
+		breaker.OnRequestComplete(rt, err)
+	}
+}
+
+func newOneBreakers(res string, nodeID string) {
+	old := make([]circuitbreaker.CircuitBreaker, 0)
+	newCbsOfRes := circuitbreaker.BuildResourceCircuitBreaker(res, breakerRules[res], old)
+	updateMux.Lock()
+	if len(newCbsOfRes) > 0 {
+		if breakers[res] == nil {
+			breakers[res] = make(map[string][]circuitbreaker.CircuitBreaker)
+		}
+		breakers[res][nodeID] = newCbsOfRes
+	}
+	updateMux.Unlock()
 }

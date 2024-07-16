@@ -16,6 +16,7 @@ import (
 	"github.com/alibaba/sentinel-golang/core/base"
 	"github.com/alibaba/sentinel-golang/core/circuitbreaker"
 	"github.com/alibaba/sentinel-golang/core/flow"
+	"github.com/alibaba/sentinel-golang/core/outlier"
 	"github.com/alibaba/sentinel-golang/core/stat"
 	"github.com/alibaba/sentinel-golang/util"
 	proto "helloworld/proto"
@@ -83,21 +84,20 @@ func TestClientLimiter2(t *testing.T) {
 	req := c.NewRequest("helloworld", "Helloworld.Call", &proto.CallRequest{Name: "Bob"}, client.WithContentType("application/json"))
 	rsp := &proto.CallResponse{}
 	t.Run("success", func(t *testing.T) {
-		var _, err = circuitbreaker.LoadRules([]*circuitbreaker.Rule{
-			{
+		var _, err = outlier.LoadRules([]*outlier.Rule{
+			{&circuitbreaker.Rule{
 				Resource:         req.Method(),
 				Strategy:         circuitbreaker.ErrorCount,
 				RetryTimeoutMs:   3000,
-				MinRequestAmount: 10,
+				MinRequestAmount: 1,
 				StatIntervalMs:   10000,
 				Threshold:        1.0,
-			},
+			}},
 		})
 		assert.Nil(t, err)
-
-		err = c.Call(context.TODO(), req, rsp)
-		fmt.Println(rsp)
-		assert.Nil(t, err)
-		assert.True(t, util.Float64Equals(1.0, stat.GetResourceNode(req.Method()).GetQPS(base.MetricEventPass)))
+		for i := 0; i < 30; i++ {
+			err = c.Call(context.TODO(), req, rsp)
+			fmt.Println(rsp, err)
+		}
 	})
 }
