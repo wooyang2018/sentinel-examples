@@ -75,6 +75,10 @@ func (ctx *EntryContext) Rt() uint64 {
 	return ctx.rt
 }
 
+func (ctx *EntryContext) FilterNodes() []string {
+	return ctx.RuleCheckResult.FilterNodes()
+}
+
 func NewEmptyEntryContext() *EntryContext {
 	return &EntryContext{}
 }

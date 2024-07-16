@@ -42,6 +42,7 @@ func (c *clientWrapper) Call(ctx context.Context, req client.Request, rsp interf
 	// 第一步：通过SentinelEntry获取Filter列表，作用到RPC调用的前序阶段
 	opt1 := client.WithSelectOption(selector.WithFilter(
 		func(old []*registry.Service) []*registry.Service {
+			fmt.Println(entry.Context().FilterNodes())
 			for _, service := range old {
 				for _, ep := range service.Nodes {
 					fmt.Println("opt1", ep.Id)
