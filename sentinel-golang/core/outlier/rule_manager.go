@@ -25,21 +25,46 @@ import (
 )
 
 var (
-	breakerRules  = make(map[string][]*circuitbreaker.Rule)
-	breakers      = make(map[string]map[string][]circuitbreaker.CircuitBreaker)
-	updateMux     = new(sync.RWMutex)
+	// resource name ---> node count
+	nodeCount = make(map[string]int)
+	// resource name ---> outlier ejection rule
+	outlierRules = make(map[string][]*Rule)
+	// resource name ---> circuitbreaker rule
+	breakerRules = make(map[string][]*circuitbreaker.Rule)
+	// resource name ---> nodeID ---> circuitbreaker rule
+	nodeBreakers = make(map[string]map[string][]circuitbreaker.CircuitBreaker)
+	// resource name ---> nodeID ---> address
+	nodeAddresses = make(map[string]map[string]string)
+
 	currentRules  = make(map[string][]*circuitbreaker.Rule, 0)
+	updateMux     = new(sync.RWMutex)
 	updateRuleMux = new(sync.Mutex)
 )
 
-func getNodesOfResource(resource string) map[string][]circuitbreaker.CircuitBreaker {
+func getNodeBreakersOfResource(resource string) map[string][]circuitbreaker.CircuitBreaker {
 	updateMux.RLock()
-	nodes := breakers[resource]
+	nodes := nodeBreakers[resource]
 	updateMux.RUnlock()
 	ret := make(map[string][]circuitbreaker.CircuitBreaker, len(nodes))
 	for nodeID, val := range nodes {
 		ret[nodeID] = val
 	}
+	return ret
+}
+
+func getOutlierRulesOfResource(resource string) []*Rule {
+	updateMux.RLock()
+	rules := outlierRules[resource]
+	updateMux.RUnlock()
+	ret := make([]*Rule, len(rules))
+	copy(ret, rules)
+	return ret
+}
+
+func getNodeCountOfResource(resource string) int {
+	updateMux.RLock()
+	ret := nodeCount[resource]
+	updateMux.RUnlock()
 	return ret
 }
 
@@ -56,12 +81,18 @@ func LoadRules(rules []*Rule) (bool, error) {
 	}
 
 	resRulesMap := make(map[string][]*circuitbreaker.Rule, 16)
-	for _, rule := range circuitRules {
+	resRulesMap2 := make(map[string][]*Rule, 16)
+	for idx, rule := range rules {
 		resRules, exist := resRulesMap[rule.Resource]
 		if !exist {
 			resRules = make([]*circuitbreaker.Rule, 0, 1)
 		}
-		resRulesMap[rule.Resource] = append(resRules, rule)
+		resRules2, exist := resRulesMap2[rule.Resource]
+		if !exist {
+			resRules2 = make([]*Rule, 0, 1)
+		}
+		resRulesMap2[rule.Resource] = append(resRules2, rule)
+		resRulesMap[rule.Resource] = append(resRules, circuitRules[idx])
 	}
 
 	updateRuleMux.Lock()
@@ -72,12 +103,12 @@ func LoadRules(rules []*Rule) (bool, error) {
 		return false, nil
 	}
 
-	err := onRuleUpdate(resRulesMap)
+	err := onRuleUpdate(resRulesMap, resRulesMap2)
 	return true, err
 }
 
 // Concurrent safe to update rules
-func onRuleUpdate(rawResRulesMap map[string][]*circuitbreaker.Rule) (err error) {
+func onRuleUpdate(rawResRulesMap map[string][]*circuitbreaker.Rule, rawResRulesMap2 map[string][]*Rule) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			var ok bool
@@ -89,22 +120,27 @@ func onRuleUpdate(rawResRulesMap map[string][]*circuitbreaker.Rule) (err error) 
 	}()
 	// ignore invalid rules
 	validResRulesMap := make(map[string][]*circuitbreaker.Rule, len(rawResRulesMap))
+	validResRulesMap2 := make(map[string][]*Rule, len(rawResRulesMap))
 	for res, rules := range rawResRulesMap {
 		validResRules := make([]*circuitbreaker.Rule, 0, len(rules))
-		for _, rule := range rules {
+		validResRules2 := make([]*Rule, 0, len(rules))
+		for idx, rule := range rules {
 			if err := circuitbreaker.IsValidRule(rule); err != nil {
 				logging.Warn("[CircuitBreaker onRuleUpdate] Ignoring invalid circuit breaking rule when loading new rules", "rule", rule, "err", err.Error())
 				continue
 			}
 			validResRules = append(validResRules, rule)
+			validResRules2 = append(validResRules2, validResRulesMap2[res][idx])
 		}
 		if len(validResRules) > 0 {
 			validResRulesMap[res] = validResRules
+			validResRulesMap2[res] = validResRules2
 		}
 	}
 	currentRules = rawResRulesMap
 	updateMux.Lock()
 	breakerRules = validResRulesMap
+	outlierRules = validResRulesMap2
 	updateMux.Unlock()
 
 	updateAllBreakers()
@@ -115,7 +151,7 @@ func updateAllBreakers() {
 	start := util.CurrentTimeNano()
 	updateMux.RLock()
 	breakersClone := make(map[string]map[string][]circuitbreaker.CircuitBreaker, len(breakerRules))
-	for res, val := range breakers {
+	for res, val := range nodeBreakers {
 		breakersClone[res] = make(map[string][]circuitbreaker.CircuitBreaker)
 		for nodeID, tcs := range val {
 			resTcClone := make([]circuitbreaker.CircuitBreaker, 0, len(tcs))
@@ -136,7 +172,7 @@ func updateAllBreakers() {
 	}
 
 	updateMux.Lock()
-	breakers = newBreakers
+	nodeBreakers = newBreakers
 	updateMux.Unlock()
 
 	logging.Debug("[Outlier onRuleUpdate] Time statistics(ns) for updating circuit breaker rule", "timeCost", util.CurrentTimeNano()-start)

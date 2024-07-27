@@ -50,29 +50,32 @@ func (c *MetricStatSlot) OnCompleted(ctx *base.EntryContext) {
 	res := ctx.Resource.Name()
 	err := ctx.Err()
 	rt := ctx.Rt()
-	nodes := getNodesOfResource(res)
+	nodes := getNodeBreakersOfResource(res)
 	nodeID := ctx.GetData("callee").(string)
-	if nodeID == "" {
+	address := ctx.GetData("address").(string)
+	if nodeID == "" || address == "" {
 		return
 	}
 	if _, ok := nodes[nodeID]; !ok {
-		newOneBreakers(res, nodeID)
-		nodes = getNodesOfResource(res)
+		newOneBreakers(res, nodeID, address)
+		nodes = getNodeBreakersOfResource(res)
 	}
 	for _, breaker := range nodes[nodeID] {
 		breaker.OnRequestComplete(rt, err)
 	}
 }
 
-func newOneBreakers(res string, nodeID string) {
+func newOneBreakers(res string, nodeID, address string) {
 	old := make([]circuitbreaker.CircuitBreaker, 0)
 	newCbsOfRes := circuitbreaker.BuildResourceCircuitBreaker(res, breakerRules[res], old)
 	updateMux.Lock()
 	if len(newCbsOfRes) > 0 {
-		if breakers[res] == nil {
-			breakers[res] = make(map[string][]circuitbreaker.CircuitBreaker)
+		if nodeBreakers[res] == nil {
+			nodeBreakers[res] = make(map[string][]circuitbreaker.CircuitBreaker)
+			nodeAddresses[res] = make(map[string]string)
 		}
-		breakers[res][nodeID] = newCbsOfRes
+		nodeBreakers[res][nodeID] = newCbsOfRes
+		nodeAddresses[res][nodeID] = address
 	}
 	updateMux.Unlock()
 }

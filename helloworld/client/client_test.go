@@ -67,7 +67,6 @@ func TestClientLimiter1(t *testing.T) {
 		assert.Nil(t, err)
 
 		err = c.Call(context.TODO(), req, rsp)
-		fmt.Println(rsp)
 		assert.Nil(t, err)
 		assert.True(t, util.Float64Equals(1.0, stat.GetResourceNode(req.Method()).GetQPS(base.MetricEventPass)))
 
@@ -85,14 +84,20 @@ func TestClientLimiter2(t *testing.T) {
 	rsp := &proto.CallResponse{}
 	t.Run("success", func(t *testing.T) {
 		var _, err = outlier.LoadRules([]*outlier.Rule{
-			{&circuitbreaker.Rule{
-				Resource:         req.Method(),
-				Strategy:         circuitbreaker.ErrorCount,
-				RetryTimeoutMs:   3000,
-				MinRequestAmount: 1,
-				StatIntervalMs:   10000,
-				Threshold:        1.0,
-			}},
+			{
+				Rule: &circuitbreaker.Rule{
+					Resource:         req.Method(),
+					Strategy:         circuitbreaker.ErrorCount,
+					RetryTimeoutMs:   3000,
+					MinRequestAmount: 1,
+					StatIntervalMs:   10000,
+					Threshold:        1.0,
+				},
+				EnableActiveRecovery: false,
+				MaxEjectionPercent:   1,
+				RecoveryInterval:     2000,
+				MaxRecoveryAttempts:  5,
+			},
 		})
 		assert.Nil(t, err)
 		for i := 0; i < 30; i++ {

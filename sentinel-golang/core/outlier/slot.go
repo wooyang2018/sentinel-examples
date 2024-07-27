@@ -39,22 +39,35 @@ func (s *Slot) Check(ctx *base.EntryContext) *base.TokenResult {
 	if len(resource) == 0 {
 		return result
 	}
-	nodes := checkNodes(ctx)
-	if len(nodes) != 0 {
-		result.SetFilterNodes(nodes)
+	filterNodes, outlierNodes := checkAllNodes(ctx)
+	if len(filterNodes) != 0 {
+		result.SetFilterNodes(filterNodes)
+	}
+	if len(outlierNodes) != 0 {
+		retryer := getRetryerOfResource(resource)
+		retryer.scheduleRetry(outlierNodes)
 	}
 	return result
 }
 
-func checkNodes(ctx *base.EntryContext) (nodeRes []string) {
-	nodes := getNodesOfResource(ctx.Resource.Name())
-	for nodeID, breakers := range nodes {
-		for _, breaker := range breakers {
-			passed := breaker.TryPass(ctx)
-			if !passed {
+func checkAllNodes(ctx *base.EntryContext) (nodeRes []string, outliers []string) {
+	resource := ctx.Resource.Name()
+	nodeBreaks := getNodeBreakersOfResource(resource)
+	outlierRules := getOutlierRulesOfResource(resource)
+	nodeCount := getNodeCountOfResource(resource)
+	for nodeID, breakers := range nodeBreaks {
+		for index, breaker := range breakers {
+			if breaker.TryPass(ctx) {
+				continue
+			}
+			rule := outlierRules[index]
+			if rule.EnableActiveRecovery {
+				outliers = append(outliers, nodeID)
+			}
+			if len(nodeRes) < int(float64(nodeCount)*rule.MaxEjectionPercent) {
 				nodeRes = append(nodeRes, nodeID)
 			}
 		}
 	}
-	return nodeRes
+	return nodeRes, outliers
 }

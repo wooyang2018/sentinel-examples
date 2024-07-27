@@ -21,4 +21,8 @@ import (
 // Rule encompasses the fields of outlier ejection rule.
 type Rule struct {
 	*circuitbreaker.Rule
+	EnableActiveRecovery bool
+	MaxEjectionPercent   float64
+	RecoveryInterval     uint32
+	MaxRecoveryAttempts  uint32
 }

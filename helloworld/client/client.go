@@ -68,7 +68,7 @@ func (c *clientWrapper) Call(ctx context.Context, req client.Request, rsp interf
 	opt2 := client.WithCallWrapper(func(f1 client.CallFunc) client.CallFunc {
 		return func(ctx context.Context, node *registry.Node, req client.Request, rsp interface{}, opts client.CallOptions) error {
 			err := f1(ctx, node, req, rsp, opts)
-			sentinelApi.TraceCallee(entry, node.Id)
+			sentinelApi.TraceCallee(entry, node.Id, node.Address)
 			if err != nil {
 				sentinelApi.TraceError(entry, err)
 			}
