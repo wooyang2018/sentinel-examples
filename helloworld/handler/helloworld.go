@@ -8,7 +8,7 @@ import (
 
 	"go-micro.dev/v4/logger"
 
-	pb "helloworld/proto"
+	pb "sentinel-examples/helloworld/proto"
 )
 
 type Helloworld struct {

@@ -6,8 +6,8 @@ import (
 	"go-micro.dev/v4/logger"
 	"go-micro.dev/v4/registry"
 
-	"helloworld/handler"
-	pb "helloworld/proto"
+	"sentinel-examples/helloworld/handler"
+	pb "sentinel-examples/helloworld/proto"
 )
 
 var (
@@ -16,9 +16,9 @@ var (
 )
 
 func main() {
-	//consulReg := consul.NewRegistry(
+	// consulReg := consul.NewRegistry(
 	//	registry.Addrs("localhost:8500"),
-	//)
+	// )
 	etcdReg := etcd.NewRegistry(
 		registry.Addrs("localhost:2379"),
 	)

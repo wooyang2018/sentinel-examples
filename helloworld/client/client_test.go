@@ -19,7 +19,8 @@ import (
 	"github.com/alibaba/sentinel-golang/core/outlier"
 	"github.com/alibaba/sentinel-golang/core/stat"
 	"github.com/alibaba/sentinel-golang/util"
-	proto "helloworld/proto"
+
+	proto "sentinel-examples/helloworld/proto"
 )
 
 const FakeErrorMsg = "fake error for testing"
