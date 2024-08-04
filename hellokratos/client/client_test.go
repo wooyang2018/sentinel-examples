@@ -25,8 +25,6 @@ func TestMain1(t *testing.T) {
 	dis := etcd.New(client)
 
 	endpoint := "discovery:///helloworld"
-	// 创建路由 Filter：筛选版本号为"2.0.0"的实例
-	// filter := filter.Version("2.0.0")
 	// 由于 gRPC 框架的限制，只能使用全局 balancer name 的方式来注入 selector
 	selector.SetGlobalSelector(wrr.NewBuilder())
 
@@ -35,7 +33,8 @@ func TestMain1(t *testing.T) {
 		grpc.WithEndpoint(endpoint),
 		grpc.WithDiscovery(dis),
 		// 通过 grpc.WithFilter 注入路由 Filter
-		// grpc.WithNodeFilter(filter),
+		grpc.WithNodeFilter(filter("test")),
+		grpc.WithMiddleware(myMiddleware),
 	)
 	if err != nil {
 		panic(err)
